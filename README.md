@@ -17,6 +17,7 @@ Sistem ini memiliki kapabilitas analisis tingkat tinggi yang meliputi:
 | Kategori | Teknologi | Deskripsi |
 | :--- | :--- | :--- |
 | **Backend** | PHP | Bahasa pemograman sisi server untuk logika dan pemrosesan data. |
+| **Frontend** | HTML & Tailwind CSS | Digunakan untuk pembuatan sisi antarmuka dashboard. |
 | **Database** | MySQL | Digunakan untuk menyimpan data penjualan Global Superstore. |
 | **Server** | Apache (XAMPP/WAMP) | Lingkungan server lokal yang diperlukan untuk menjalankan aplikasi PHP. |
 | **Frontend** | HTML, CSS, JavaScript | Digunakan untuk antarmuka pengguna dan interaktivitas. |
