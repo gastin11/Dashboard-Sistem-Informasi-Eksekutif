@@ -1,19 +1,34 @@
 <?php
 require 'config.php';
 
+// Ambil tahun yang dipilih (default tahun saat ini atau semua tahun)
+$selected_year = isset($_GET['year']) ? $_GET['year'] : 'all';
+
+// Query untuk mendapatkan daftar tahun yang tersedia
+$years_query = "SELECT DISTINCT YEAR(order_date) as year FROM global_superstore ORDER BY year DESC";
+$available_years = $pdo->query($years_query)->fetchAll();
+
+// Kondisi WHERE berdasarkan tahun yang dipilih
+$year_condition = $selected_year !== 'all' ? "WHERE YEAR(order_date) = " . intval($selected_year) : "";
+
 // Ambil statistik ringkasan
 $stats = [
-    'total_sales' => $pdo->query("SELECT SUM(sales) as total FROM global_superstore")->fetch()['total'],
-    'total_profit' => $pdo->query("SELECT SUM(profit) as total FROM global_superstore")->fetch()['total'],
-    'total_orders' => $pdo->query("SELECT COUNT(DISTINCT order_id) as total FROM global_superstore")->fetch()['total'],
-    'total_customers' => $pdo->query("SELECT COUNT(DISTINCT customer_name) as total FROM global_superstore")->fetch()['total']
+    'total_sales' => $pdo->query("SELECT SUM(sales) as total FROM global_superstore $year_condition")->fetch()['total'],
+    'total_profit' => $pdo->query("SELECT SUM(profit) as total FROM global_superstore $year_condition")->fetch()['total'],
+    'total_orders' => $pdo->query("SELECT COUNT(DISTINCT order_id) as total FROM global_superstore $year_condition")->fetch()['total'],
+    'total_customers' => $pdo->query("SELECT COUNT(DISTINCT customer_name) as total FROM global_superstore $year_condition")->fetch()['total']
 ];
 
 // Data untuk chart kategori
-$categories = $pdo->query("SELECT category, SUM(sales) as total_sales FROM global_superstore GROUP BY category ORDER BY total_sales DESC")->fetchAll();
+$categories = $pdo->query("SELECT category, SUM(sales) as total_sales FROM global_superstore $year_condition GROUP BY category ORDER BY total_sales DESC")->fetchAll();
 
-// Data region
-$regions = $pdo->query("SELECT region, SUM(sales) as total_sales, SUM(profit) as total_profit FROM global_superstore GROUP BY region ORDER BY total_sales DESC")->fetchAll();
+// Data region untuk sales dan profit
+$regions_sales = $pdo->query("SELECT region, SUM(sales) as total_sales FROM global_superstore $year_condition GROUP BY region ORDER BY total_sales DESC")->fetchAll();
+
+$regions_profit = $pdo->query("SELECT region, SUM(profit) as total_profit FROM global_superstore $year_condition GROUP BY region ORDER BY total_profit DESC")->fetchAll();
+
+// Data region untuk tabel
+$regions = $pdo->query("SELECT region, SUM(sales) as total_sales, SUM(profit) as total_profit FROM global_superstore $year_condition GROUP BY region ORDER BY total_sales DESC")->fetchAll();
 ?>
 <!doctype html>
 <html lang="id">
@@ -87,11 +102,16 @@ $regions = $pdo->query("SELECT region, SUM(sales) as total_sales, SUM(profit) as
             <?= date('l, d F Y') ?>
           </p>
         </div>
-        <!-- <div class="flex items-center gap-3">
-          <button class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium">
-            <i class="fas fa-download mr-2"></i>Export Report
-          </button>
-        </div> -->
+        <div class="flex items-center gap-3">
+          <select id="yearFilter" class="px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all">
+            <option value="all" <?= $selected_year === 'all' ? 'selected' : '' ?>>Semua Tahun</option>
+            <?php foreach ($available_years as $year): ?>
+              <option value="<?= $year['year'] ?>" <?= $selected_year == $year['year'] ? 'selected' : '' ?>>
+                Tahun <?= $year['year'] ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
+        </div>
       </div>
     </header>
 
@@ -153,8 +173,24 @@ $regions = $pdo->query("SELECT region, SUM(sales) as total_sales, SUM(profit) as
 
         <!-- Sales by Region -->
         <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-100">
-          <h3 class="text-lg font-semibold text-slate-800 mb-4">Sales by Region</h3>
-          <canvas id="regionChart" class="max-h-64"></canvas>
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-slate-800">Sales by Region</h3>
+            <span class="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
+              <?= $selected_year === 'all' ? 'All Years' : 'Year ' . $selected_year ?>
+            </span>
+          </div>
+          <canvas id="regionSalesChart" class="max-h-64"></canvas>
+        </div>
+
+        <!-- Profit by Region -->
+        <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-100 lg:col-span-2">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-slate-800">Profit by Region</h3>
+            <span class="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
+              <?= $selected_year === 'all' ? 'All Years' : 'Year ' . $selected_year ?>
+            </span>
+          </div>
+          <canvas id="regionProfitChart" class="max-h-64"></canvas>
         </div>
       </div>
 
@@ -224,6 +260,12 @@ $regions = $pdo->query("SELECT region, SUM(sales) as total_sales, SUM(profit) as
       }
     });
 
+    // Year filter change handler
+    document.getElementById('yearFilter').addEventListener('change', function() {
+      const year = this.value;
+      window.location.href = '?year=' + year;
+    });
+
     // Category Chart
     const categoryCtx = document.getElementById('categoryChart').getContext('2d');
     new Chart(categoryCtx, {
@@ -251,15 +293,15 @@ $regions = $pdo->query("SELECT region, SUM(sales) as total_sales, SUM(profit) as
       }
     });
 
-    // Region Chart
-    const regionCtx = document.getElementById('regionChart').getContext('2d');
-    new Chart(regionCtx, {
+    // Region Sales Chart
+    const regionSalesCtx = document.getElementById('regionSalesChart').getContext('2d');
+    new Chart(regionSalesCtx, {
       type: 'bar',
       data: {
-        labels: <?= json_encode(array_column($regions, 'region')) ?>,
+        labels: <?= json_encode(array_column($regions_sales, 'region')) ?>,
         datasets: [{
           label: 'Sales',
-          data: <?= json_encode(array_column($regions, 'total_sales')) ?>,
+          data: <?= json_encode(array_column($regions_sales, 'total_sales')) ?>,
           backgroundColor: '#4887ecff',
           borderRadius: 6
         }]
@@ -269,6 +311,45 @@ $regions = $pdo->query("SELECT region, SUM(sales) as total_sales, SUM(profit) as
         maintainAspectRatio: true,
         plugins: {
           legend: { display: false }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: function(value) {
+                return '$' + value.toLocaleString();
+              }
+            }
+          }
+        }
+      }
+    });
+
+    // Region Profit Chart
+    const regionProfitCtx = document.getElementById('regionProfitChart').getContext('2d');
+    new Chart(regionProfitCtx, {
+      type: 'bar',
+      data: {
+        labels: <?= json_encode(array_column($regions_profit, 'region')) ?>,
+        datasets: [{
+          label: 'Profit',
+          data: <?= json_encode(array_column($regions_profit, 'total_profit')) ?>,
+          backgroundColor: '#10b981',
+          borderRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                return 'Profit: $' + context.parsed.y.toLocaleString();
+              }
+            }
+          }
         },
         scales: {
           y: {
